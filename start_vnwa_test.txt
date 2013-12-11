@@ -1,0 +1,53 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Runtime.InteropServices;
+using System.Diagnostics;
+
+
+namespace ConsoleApplication1
+{
+    class Program
+    {
+        static void Main()
+        {
+            LaunchCommandLineApp();
+        }
+
+        /// <summary>
+        /// Launch the legacy application with some options set.
+        /// </summary>
+        static void LaunchCommandLineApp()
+        {
+            // For the example
+            const string ex1 = "C:\\VNWA";
+            const string ex2 = "C:\\Dir";
+
+            // Use ProcessStartInfo class
+            ProcessStartInfo startInfo = new ProcessStartInfo();
+            startInfo.CreateNoWindow = false;
+            startInfo.UseShellExecute = false;
+
+            startInfo.FileName = "C:\\VNWA\\VNWA.exe";
+           // startInfo.WindowStyle = ProcessWindowStyle.Hidden;
+            startInfo.Arguments = "-remote -callback 2622836 1024 -debug";
+
+            try
+            {
+                // Start the process with the info we specified.
+                // Call WaitForExit and then the using statement will close.
+                using (Process exeProcess = Process.Start(startInfo))
+                {
+                    exeProcess.WaitForExit();
+                }
+            }
+            catch
+            {
+                // Log error.
+            }
+            Console.ReadLine();
+        }
+    }
+}
