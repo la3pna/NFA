@@ -1,0 +1,8 @@
+make vnwa test script
+run script to measure s11 w. cal const.
+close vnwa
+read s11 from file
+read nf from meter
+add line to file
+increase tuner
+goto start
