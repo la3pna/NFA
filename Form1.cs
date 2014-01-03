@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-
+using System.Runtime.InteropServices;
 using System.Diagnostics;   // for Debug
 using System.Numerics;  // for Complex
 
@@ -40,7 +40,6 @@ namespace NFA
         // Create an array that defines the values of the R' and X' circles we want to display
         float[] circles = new float[] {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f, 1.2f,
                                              1.4f, 1.6f, 1.8f, 2.0f, 3.0f, 4.0f, 5.0f, 10.0f, 20.0f};
-
         // Create array of magic numbers to prevent drawing arc outside the unity circle - this should be done in code!
         float[] Magic = new float[] { 11.4f, 22.6f, 33.5f, 43.5f, 53.2f, 62, 70, 77, 84, 90, 100, 109, 116, 122, 127, 143, 152, 158, 170, 179 };
         // Create array of magic numbers that position the X' text - this should be done in code!
@@ -332,7 +331,45 @@ namespace NFA
             textBox1.ScrollToCaret();
         }
 
+        [DllImport("user32.dll")]
+        public static extern int SendMessage(
+              int hWnd,      // handle to destination window
+              uint Msg,       // message
+              long wParam,  // first message parameter
+              long lParam   // second message parameter
+              );
 
+        private void button1_Click(object sender, EventArgs e)
+        {
+            //start the vnwa program, set frequency to value from textbox2
+
+            ProcessStartInfo startInfo = new ProcessStartInfo();
+            startInfo.CreateNoWindow = false;
+            startInfo.UseShellExecute = false;
+            startInfo.WindowStyle = ProcessWindowStyle.Maximized;
+            startInfo.FileName = "C:\\VNWA\\VNWA.exe";
+            //startInfo.WindowStyle = ProcessWindowStyle.Hidden;
+            startInfo.Arguments = "-remote -callback 2622836 1024 -debug";
+
+            try
+            {
+                // Start the process with the info we specified.
+                // Call WaitForExit and then the using statement will close.
+                using (Process exeProcess = Process.Start(startInfo))
+                {
+                    exeProcess.WaitForExit();
+                }
+            }
+            catch
+            {
+                // Log error.
+            }
+
+
+
+
+            //SendMessage()
+        }
 
     }
 }
