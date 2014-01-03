@@ -9,8 +9,8 @@ Servo myservo2; // a maximum of eight servo objects can be created
 int pos = 0;    // variable to store the servo position 
 int j = 0;
 int k = 0;
-int inData;
- 
+int inData;;
+ int kangles[] = {172,172,159,148,138,124,113,101,90,77,65,55,43};
 void setup() 
 { 
   myservo.attach(9);  // attaches the servo on pin 9 to the servo object 
@@ -40,8 +40,9 @@ void loop()
   }
   
    if (inData == 'K') {   // increase inductance (need to change step size)
-        k = k + 14;      
-        myservo2.write(180 - k);
+        k = k + 1;
+        if (k >12) {k = 0;}      
+        myservo2.write(kangles[k]);
         inData = 0;
   
   }
@@ -55,8 +56,9 @@ void loop()
   
   if (inData == 'M') {      // Zero inductor. 
   
-        k = 180;      
+        k = 162;      
         myservo2.write(k);
+        k = 0;
         inData = 0;
   
   }
