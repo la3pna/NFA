@@ -56,9 +56,8 @@ void loop()
   
   if (inData == 'M') {      // Zero inductor. 
   
-        k = 162;      
-        myservo2.write(k);
-        k = 0;
+        k = 0;      
+        myservo2.write(kangles[k]);
         inData = 0;
   
   }
