@@ -10,20 +10,75 @@ using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using System.Diagnostics;   // for Debug
 using System.Numerics;  // for Complex
+using System.IO;
+using System.Globalization;
+using System.IO.Ports;
+using System.Threading;
 
 namespace NFA
 {
     public partial class Form1 : Form
     {
+        [DllImport("user32.dll")]
+        public static extern IntPtr FindWindow(string lpClassName, String lpWindowName);
+        [DllImport("user32.dll")]
+        public static extern int SendMessage(IntPtr hWnd, int wMsg, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        static extern uint RegisterWindowMessage(string lpString);
+        private readonly static int WM_USER = 0x0400;
+        int WM_rem;
+        IntPtr hwnd;
+        bool firststart = true;
+        Form2 secondForm = new Form2();
+        public static bool debug = false;
+
         public Form1()
         {
             InitializeComponent();
+
+           
+            List<String> tList = new List<String>();
+
+            comboBox1.Items.Clear();
+
+            foreach (string s in SerialPort.GetPortNames())
+            {
+                tList.Add(s);
+            }
+
+            tList.Sort();
+            comboBox1.Items.Add("Select COM port for tuner...");
+            comboBox1.Items.AddRange(tList.ToArray());
+            comboBox1.SelectedIndex = 0;
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
             this.SmithPictureBox.Invalidate();
-            Textboxadd( "Program initiated, Smith chart drawn.");
+            Textboxadd( "Program initiated, Smith chart drawn, VNWA program started.");
+            // Use ProcessStartInfo class
+            ProcessStartInfo startInfo = new ProcessStartInfo();
+            startInfo.CreateNoWindow = false;
+            startInfo.UseShellExecute = false;
+
+            startInfo.FileName = "C:\\VNWA\\VNWA.exe";
+            // startInfo.WindowStyle = ProcessWindowStyle.Hidden;
+            startInfo.Arguments = "-remote -callback " + System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle.ToString() + " " + WM_USER.ToString() + " -debug";
+
+            try
+            {
+                // Start the process with the info we specified.
+                // Call WaitForExit and then the using statement will close.
+                using (Process exeProcess = Process.Start(startInfo))
+                {
+
+
+                }
+            }
+            catch
+            {
+                // Log error.
+            }
         
         }
 
@@ -49,6 +104,7 @@ namespace NFA
         private int unity_circle_dia = 0;
 
         Pen p = new Pen(Brushes.Black);
+        List<Complex> s11a = new List<Complex>();
 
         private Form1 form;
         public void SetForm(Form1 myForm)
@@ -190,8 +246,8 @@ namespace NFA
 
             RhoAPlot[index] = rhoA;
             // Convert G into a complex impedance Zx
-            Complex Zo = new Complex(50, 0);
-            Complex Z = new Complex(0, 0);
+           // Complex Zo = new Complex(50, 0);
+            Complex Z = new Complex();
             // VNA.ComputeComplexImpedance(rhoA, Zo, ref Z);
             ZPlot[index] = Z;
 
@@ -222,6 +278,7 @@ namespace NFA
             for (int i = 0; i < RhoAPlot.Length; ++i)
             {
                 Complex rhoA = RhoAPlot[i];
+                
                 Debug.WriteLine("G.Magnitude = {0}  G.Phase = {1}", rhoA.Magnitude, rhoA.Phase * 180 / Math.PI);
                 Debug.WriteLine("G.Real = {0}  G.Imaginary = {1}", rhoA.Real, rhoA.Imaginary);
 
@@ -229,7 +286,8 @@ namespace NFA
                 if (i == 0)
                     dotColour = Brushes.Green;      // first dot is green so we can see starting frequency
                 else
-                    dotColour = Brushes.Black;
+                    dotColour = Brushes.Blue;
+                
 
                 g.FillEllipse(dotColour, (int)(unity_circle_dia / 2 * rhoA.Real) - dot / 2, -(int)(unity_circle_dia / 2 * rhoA.Imaginary) - dot / 2, dot, dot);
             }
@@ -238,6 +296,29 @@ namespace NFA
             g.ResetTransform();
         }
 
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_USER)
+            {
+                if (firststart == true)
+                {
+
+                    WM_rem = m.WParam.ToInt32();
+                    hwnd = new IntPtr(m.LParam.ToInt32());
+                    firststart = false;
+                }
+                if (debug == true) 
+                {
+                    Textboxadd(m.WParam.ToString() + "    " + m.LParam.ToString()); 
+                }
+                
+             
+            }
+            else
+            {
+                base.WndProc(ref m);
+            }
+        }
 
         private void PlotCurve(Graphics g)
         {
@@ -308,21 +389,7 @@ namespace NFA
 
         private void SmithPictureBox_Click(object sender, EventArgs e)
         {
-
-            Complex x = new Complex(1, 2);
-
-            double xmag = (x.Real - 1) / (x.Real + 1);
-            double teta = ((x.Imaginary - 1) / (x.Imaginary + 1));
-
-            Complex Z = new Complex(xmag, teta);
-
-            SetSteps(1, MyFont);
-            Set_Z(Z, Steps);
-
-            Textboxadd("added point");
-
-
-
+            this.SmithPictureBox.Invalidate();
         }
 
         private void textBox1_TextChanged(object sender, EventArgs e)
@@ -331,44 +398,188 @@ namespace NFA
             textBox1.ScrollToCaret();
         }
 
-        [DllImport("user32.dll")]
-        public static extern int SendMessage(
-              int hWnd,      // handle to destination window
-              uint Msg,       // message
-              long wParam,  // first message parameter
-              long lParam   // second message parameter
-              );
-
         private void button1_Click(object sender, EventArgs e)
         {
-            //start the vnwa program, set frequency to value from textbox2
+            Textboxadd(debug.ToString());
+        }
 
-            ProcessStartInfo startInfo = new ProcessStartInfo();
-            startInfo.CreateNoWindow = false;
-            startInfo.UseShellExecute = false;
-            startInfo.WindowStyle = ProcessWindowStyle.Maximized;
-            startInfo.FileName = "C:\\VNWA\\VNWA.exe";
-            //startInfo.WindowStyle = ProcessWindowStyle.Hidden;
-            startInfo.Arguments = "-remote -callback 2622836 1024 -debug";
+        private void Zpoint(Complex x, int step)
+        {
+            Complex z0 = new Complex(50, 0);
+            Complex Z = new Complex();
+            Z = Complex.Divide(Complex.Subtract(x, z0), Complex.Add(x, z0));
+            // SetSteps(step, MyFont);
+            Set_Z(Z, step);
+        }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+           // setup instrument button
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(0));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(99));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(58));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(92));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(116));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(101));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(115));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(116));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(92));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(116));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(101));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(115));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(116));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(46));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(115));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(49));
+            SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(112));
+            SendMessage(hwnd, WM_rem, new IntPtr(8), new IntPtr(Convert.ToInt32(textBox3.Text)));
+            SendMessage(hwnd, WM_rem, new IntPtr(9), new IntPtr(Convert.ToInt32(textBox3.Text)));
+
+            if (serialPort1.IsOpen)
+            {
+                serialPort1.Close();
+            }
+
+            serialPort1.PortName = comboBox1.Text;
+            serialPort1.BaudRate = 9600;
+            serialPort1.DataBits = 8;
+            serialPort1.StopBits = StopBits.One;
+            serialPort1.Parity = Parity.None;
+            serialPort1.ReadBufferSize = 4096;
+            serialPort1.NewLine = "\r\n";
+            serialPort1.Handshake = Handshake.None;
+            serialPort1.ReadTimeout = 500;
 
             try
             {
-                // Start the process with the info we specified.
-                // Call WaitForExit and then the using statement will close.
-                using (Process exeProcess = Process.Start(startInfo))
+                serialPort1.Open();
+                serialPort1.Write("M");
+                serialPort1.Write("L");
+            }
+            catch (Exception ex)
+            {
+                if (debug == true)
                 {
-                    exeProcess.WaitForExit();
+                    Textboxadd(ex.ToString());
                 }
             }
-            catch
+        }
+
+        private void read_testfile()
+
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            SendMessage(hwnd, WM_rem, new IntPtr(0), new IntPtr(0));
+        }
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            // do measure button!!!
+            Thread t = new Thread(measure);          // Kick off a new thread
+            t.Start(); 
+        }
+
+        public void measure()
+        {
+            for (int i = 0; i <= 12; i++)
             {
-                // Log error.
+                for (int j = 0; j <= 90; j++)
+                {
+                    try
+                    {
+                        serialPort1.Write("J");
+                        if (debug == true) 
+                        {
+                            Textboxadd("J" + j.ToString()); 
+                        }
+                        
+                    }
+                    catch (Exception ex)
+                    {
+                        Textboxadd(ex.ToString());
+                    }
+                    System.Threading.Thread.Sleep(2200);
+                    // here we need somthing that measures stuff
+                    VNAsweep();
+                    //delay some
+                    //switch to noise measure
+                    //measure noise parameter
+                    //switch back
+
+                }
+
+                try
+                {
+                    serialPort1.Write("L");
+                    serialPort1.Write("K");
+                    if (debug == true)
+                    {
+                    Textboxadd("K" + i.ToString());
+                    }
+                    
+                }
+                catch (Exception ex)
+                {
+                    Textboxadd(ex.ToString());
+                }
             }
+        }
 
+        private void button4_Click(object sender, EventArgs e)
+        {
+            // sweep button
+            //SendMessage(hwnd, WM_rem, new IntPtr(8), new IntPtr(Convert.ToInt32(textBox3.Text)));
+            //SendMessage(hwnd, WM_rem, new IntPtr(9), new IntPtr(Convert.ToInt32(textBox3.Text)));
+            VNAsweep();
 
+        }
 
+        private void VNAsweep()
+        {
+            
+            SendMessage(hwnd, WM_rem, new IntPtr(10), new IntPtr(1));
+            SendMessage(hwnd, WM_rem, new IntPtr(1), new IntPtr(2));
+            System.Threading.Thread.Sleep(200);
+            SendMessage(hwnd, WM_rem, new IntPtr(5), new IntPtr(1));
+            System.Threading.Thread.Sleep(1000);
+            read_testfile();
+            System.Threading.Thread.Sleep(100);
+            Complex[] x = s11a.ToArray();
 
-            //SendMessage()
+            int j = x.Length;
+            SetSteps(j + 1, MyFont);
+            for (int i = 0; i < x.Length; i++)
+            {
+                Set_Z(x[i], i);
+                //  Zpoint(x[i], i);
+            }
+            System.Threading.Thread.Sleep(100);
+            this.SmithPictureBox.Invalidate();
+            if (debug == true)
+            {
+                Textboxadd("added point");
+            }
+            
+        }
+        private void button5_Click(object sender, EventArgs e)
+        {
+            // plot button
+            Complex[] x = s11a.ToArray(); 
+            
+            int j = x.Length;
+            SetSteps(j + 1, MyFont);
+            for (int i = 0; i < x.Length; i++)
+            {
+                Set_Z(x[i], i);
+              //  Zpoint(x[i], i);
+            }
+            this.SmithPictureBox.Invalidate();
+            Textboxadd("added point");
+        }
+
+        private void settingsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            secondForm.Show();
         }
 
     }

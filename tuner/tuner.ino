@@ -30,11 +30,11 @@ void loop()
   
     if (inData == 'J') {  // J to increase cap by 1 deg. 
         j = j + 1; 
-       if (j > 179){      // this code allows the tuner to just receive j to increase the tuning steps
-         k = k + 1;       // may need to disable this if it gives issues with the control SW
+       if (j > 90){      // this code allows the tuner to just receive j to increase the tuning steps
+       //  k = k + 1;       // may need to disable this if it gives issues with the control SW
          j = 0;
        } 
-        myservo.write(j);
+        myservo.write(j*2);
         inData = 0;
   
   }
