@@ -214,12 +214,12 @@ namespace ConsoleApplication1
             {
                 // Get a random call sign to play
                 string morseText = myrandcall();
-                foreach (char c in morseText)
-                {
+               // foreach (char c in morseText)
+               // {
                     // Get the Morse "song" corresponding to the current letter and send it to buzz()
                     // buzz(speaker, (string)morse[c], note);
-                    Console.Write(c);
-                }
+                    Console.WriteLine(morseText);
+                //}
                 // Delay 5 seconds before repeating
                 // speaker.SetDutyCycle(0);
                 //Thread.Sleep(5000);
