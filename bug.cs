@@ -21,6 +21,7 @@ namespace ConsoleApplication1
                 case 0: // 1x1 call
                     call.Append(prefix[_rnd.Next(prefix.Length)]);
                     call.Append(_rnd.Next(10).ToString());
+                   
                     call.Append(letter[_rnd.Next(letter.Length)]);
                     break;
                 case 1: // 1x2 call
@@ -95,25 +96,25 @@ namespace ConsoleApplication1
             string number = "0123456789";
             StringBuilder call = new StringBuilder();
             // Decide what length of call sign to generate
-            switch ((int)_rnd.Next(6))
+            switch ((int)_rnd.Next(3))
             {
                 case 0: // 1x1 call
-                    call.Append(prefix[_rnd.Next(prefix.Length + 1)]);
-                    call.Append(number[_rnd.Next(number.Length + 1)]);
-                    call.Append(letter[_rnd.Next(letter.Length + 1)]);
+                    call.Append(prefix[_rnd.Next(prefix.Length )]);
+                    call.Append(number[_rnd.Next(number.Length)]);
+                    call.Append(letter[_rnd.Next(letter.Length)]);
                     break;
                 case 1: // 1x2 call
-                    call.Append(prefix[_rnd.Next(prefix.Length + 1)]);
-                    call.Append(number[_rnd.Next(number.Length + 1)]);
-                    call.Append(letter[_rnd.Next(letter.Length + 1)]);
-                    call.Append(letter[_rnd.Next(letter.Length + 1)]);
+                    call.Append(prefix[_rnd.Next(prefix.Length )]);
+                    call.Append(number[_rnd.Next(number.Length)]);
+                    call.Append(letter[_rnd.Next(letter.Length )]);
+                    call.Append(letter[_rnd.Next(letter.Length )]);
                     break;
                 case 2: // 1x3 call
-                    call.Append(prefix[_rnd.Next(prefix.Length + 1)]);
-                    call.Append(number[_rnd.Next(number.Length + 1)]);
-                    call.Append(letter[_rnd.Next(letter.Length + 1)]);
-                    call.Append(letter[_rnd.Next(letter.Length + 1)]);
-                    call.Append(letter[_rnd.Next(letter.Length + 1)]);
+                    call.Append(prefix[_rnd.Next(prefix.Length)]);
+                    call.Append(number[_rnd.Next(number.Length )]);
+                    call.Append(letter[_rnd.Next(letter.Length)]);
+                    call.Append(letter[_rnd.Next(letter.Length)]);
+                    call.Append(letter[_rnd.Next(letter.Length)]);
                     break;
                 case 3: // 2x1 call
                     call.Append(prefix[_rnd.Next(prefix.Length + 1)]);
@@ -218,7 +219,8 @@ namespace ConsoleApplication1
                // {
                     // Get the Morse "song" corresponding to the current letter and send it to buzz()
                     // buzz(speaker, (string)morse[c], note);
-                    Console.WriteLine(morseText);
+                  //  Console.WriteLine(morseText);
+                Console.WriteLine(randCall());
                 //}
                 // Delay 5 seconds before repeating
                 // speaker.SetDutyCycle(0);

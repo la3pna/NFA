@@ -5,6 +5,7 @@ using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
@@ -14,11 +15,13 @@ using System.IO;
 using System.Globalization;
 using System.IO.Ports;
 using System.Threading;
+using GPIBlibrary;
 
 namespace NFA
 {
     public partial class Form1 : Form
     {
+        GPIB bus = new GPIB();
         [DllImport("user32.dll")]
         public static extern IntPtr FindWindow(string lpClassName, String lpWindowName);
         [DllImport("user32.dll")]
@@ -31,12 +34,15 @@ namespace NFA
         bool firststart = true;
         Form2 secondForm = new Form2();
         public static bool debug = false;
+        int addrNF;
+        int addrSW;
+
 
         public Form1()
         {
             InitializeComponent();
 
-           
+
             List<String> tList = new List<String>();
 
             comboBox1.Items.Clear();
@@ -50,12 +56,19 @@ namespace NFA
             comboBox1.Items.Add("Select COM port for tuner...");
             comboBox1.Items.AddRange(tList.ToArray());
             comboBox1.SelectedIndex = 0;
+
+
+            List<String> tList2 = bus.portlist();
+            comboBox2.Items.Add("Select COM port for GPIB...");
+            comboBox2.Items.AddRange(tList.ToArray());
+            comboBox2.SelectedIndex = 0;
+
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
             this.SmithPictureBox.Invalidate();
-            Textboxadd( "Program initiated, Smith chart drawn, VNWA program started.");
+            Textboxadd("Program initiated, Smith chart drawn, VNWA program started.");
             // Use ProcessStartInfo class
             ProcessStartInfo startInfo = new ProcessStartInfo();
             startInfo.CreateNoWindow = false;
@@ -79,7 +92,7 @@ namespace NFA
             {
                 // Log error.
             }
-        
+
         }
 
         private void Textboxadd(string s)
@@ -105,7 +118,8 @@ namespace NFA
 
         Pen p = new Pen(Brushes.Black);
         List<Complex> s11a = new List<Complex>();
-
+        List<decimal> nf = new List<decimal>();
+        List<decimal> gain_dut = new List<decimal>();
         private Form1 form;
         public void SetForm(Form1 myForm)
         {
@@ -125,7 +139,7 @@ namespace NFA
             g.DrawRectangle(p, r);                // draw outline
             // fill chart rectangle with white
             g.FillRectangle(Brushes.White, r);
-            
+
 
             // set the origin of the rectangle that contains the unity circle to be 2 * origin_x and origin_y for now
             int origin_unity_x = offsetX;
@@ -225,6 +239,9 @@ namespace NFA
         private Complex[] ZPlot;
         private Font MyFont;
         private int Steps = -1;
+        private decimal[] noisefigure;
+        private decimal[] gain;
+
 
         public void SetSteps(int steps, Font font)
         {
@@ -246,7 +263,7 @@ namespace NFA
 
             RhoAPlot[index] = rhoA;
             // Convert G into a complex impedance Zx
-           // Complex Zo = new Complex(50, 0);
+            // Complex Zo = new Complex(50, 0);
             Complex Z = new Complex();
             // VNA.ComputeComplexImpedance(rhoA, Zo, ref Z);
             ZPlot[index] = Z;
@@ -278,16 +295,30 @@ namespace NFA
             for (int i = 0; i < RhoAPlot.Length; ++i)
             {
                 Complex rhoA = RhoAPlot[i];
-                
+
                 Debug.WriteLine("G.Magnitude = {0}  G.Phase = {1}", rhoA.Magnitude, rhoA.Phase * 180 / Math.PI);
                 Debug.WriteLine("G.Real = {0}  G.Imaginary = {1}", rhoA.Real, rhoA.Imaginary);
 
                 // draw a dot on the chart at the location of Z', scale for diameter of the dot :)
-                if (i == 0)
-                    dotColour = Brushes.Green;      // first dot is green so we can see starting frequency
-                else
-                    dotColour = Brushes.Blue;
-                
+                dotColour = Brushes.Blue;
+                try
+                {
+                    if (noisefigure[i] > 20)
+                        dotColour = Brushes.Red;      // first dot is green so we can see starting frequency
+                    else if ((noisefigure[i] < 20) && (noisefigure[i] > 6))
+                        dotColour = Brushes.DarkSalmon;
+                    else if ((noisefigure[i] < 6) && (noisefigure[i] > 3))
+                        dotColour = Brushes.Orange;
+                    else if ((noisefigure[i] < 3) && (noisefigure[i] > 1))
+                        dotColour = Brushes.Cyan;
+
+                    else if (noisefigure[i] < 1)
+                        dotColour = Brushes.Green;
+                    else
+                        dotColour = Brushes.Blue;
+                }
+                catch (Exception ex) { }
+
 
                 g.FillEllipse(dotColour, (int)(unity_circle_dia / 2 * rhoA.Real) - dot / 2, -(int)(unity_circle_dia / 2 * rhoA.Imaginary) - dot / 2, dot, dot);
             }
@@ -307,12 +338,12 @@ namespace NFA
                     hwnd = new IntPtr(m.LParam.ToInt32());
                     firststart = false;
                 }
-                if (debug == true) 
+                if (debug == true)
                 {
-                    Textboxadd(m.WParam.ToString() + "    " + m.LParam.ToString()); 
+                    Textboxadd(m.WParam.ToString() + "    " + m.LParam.ToString());
                 }
-                
-             
+
+
             }
             else
             {
@@ -398,10 +429,7 @@ namespace NFA
             textBox1.ScrollToCaret();
         }
 
-        private void button1_Click(object sender, EventArgs e)
-        {
-            Textboxadd(debug.ToString());
-        }
+
 
         private void Zpoint(Complex x, int step)
         {
@@ -412,9 +440,11 @@ namespace NFA
             Set_Z(Z, step);
         }
 
+        int freqMHz;
         private void button2_Click(object sender, EventArgs e)
         {
-           // setup instrument button
+            // setup instrument button
+            //VNA stuff
             SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(0));
             SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(99));
             SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(58));
@@ -434,7 +464,7 @@ namespace NFA
             SendMessage(hwnd, WM_rem, new IntPtr(7), new IntPtr(112));
             SendMessage(hwnd, WM_rem, new IntPtr(8), new IntPtr(Convert.ToInt32(textBox3.Text)));
             SendMessage(hwnd, WM_rem, new IntPtr(9), new IntPtr(Convert.ToInt32(textBox3.Text)));
-
+            //tuner stuff
             if (serialPort1.IsOpen)
             {
                 serialPort1.Close();
@@ -460,23 +490,79 @@ namespace NFA
             {
                 if (debug == true)
                 {
-                    Textboxadd(ex.ToString());
+                    //   Textboxadd(ex.ToString());
                 }
             }
+            //NF meter stuff
+            bus.start(comboBox2.Text, 2000);
+            addrNF = Convert.ToInt32(textBox2.Text);
+            addrSW = Convert.ToInt32(textBox4.Text);
+            freqMHz = Convert.ToInt32(textBox3.Text) / 1000000;
+            bus.write(addrNF, "FR" + freqMHz.ToString() + "MZ");
+            bus.write(addrNF, "H1");
+            bus.write(addrNF, "M2");
+            bus.write(addrNF, "N0");
+            bus.write(addrNF, "X0");
+
         }
 
         private void read_testfile()
+        {
+            // read testfile, then add to the frequency list. 
 
+            string line;
+            System.IO.StreamReader sr = new
+            System.IO.StreamReader("C:\\test\\test.s1p");
+            while ((line = sr.ReadLine()) != null)
+            {
+                if (line.ToLowerInvariant().Contains('!'))
+                {
+                }
+                else if (line.ToLowerInvariant().Contains('#'))
+                {
+                }
+                else
+                {
+
+                    Complex s11b;
+                    string[] servalspl = line.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    string freqStrn = servalspl[0];
+                    string s11reStrn = servalspl[1];
+                    string s11imagStrn = servalspl[2];
+
+                    float s11re = Convert.ToSingle(s11reStrn, CultureInfo.InvariantCulture);
+                    float s11imag = Convert.ToSingle(s11imagStrn, CultureInfo.InvariantCulture);
+                    s11b = new Complex(s11re, s11imag);
+                    s11a.Add(s11b);
+
+                    Complex rho = 50 * ((1 + s11b) / (1 - s11b));
+                   // textBox5.Text = Convert.ToString(rho.Real);
+                   // textBox6.Text = Convert.ToString(rho.Imaginary);
+                }
+            }
+            sr.Close();
+        }
+
+        Thread t;
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             SendMessage(hwnd, WM_rem, new IntPtr(0), new IntPtr(0));
+            try
+            {
+                t.Abort();
+               // SendMessage(hwnd, WM_rem, new IntPtr(0), new IntPtr(0));
+            }
+            catch (Exception ex)
+            {
+
+            }
         }
 
         private void button3_Click(object sender, EventArgs e)
         {
             // do measure button!!!
-            Thread t = new Thread(measure);          // Kick off a new thread
-            t.Start(); 
+            t = new Thread(measure);          // Kick off a new thread
+            t.Start();
         }
 
         public void measure()
@@ -488,24 +574,31 @@ namespace NFA
                     try
                     {
                         serialPort1.Write("J");
-                        if (debug == true) 
+                        if (debug == true)
                         {
-                            Textboxadd("J" + j.ToString()); 
+                            // Textboxadd("J" + j.ToString()); 
                         }
-                        
+
                     }
                     catch (Exception ex)
                     {
-                        Textboxadd(ex.ToString());
+                        // Textboxadd(ex.ToString());
                     }
                     System.Threading.Thread.Sleep(2200);
                     // here we need somthing that measures stuff
                     VNAsweep();
                     //delay some
+                   // System.Threading.Thread.Sleep(2000);
                     //switch to noise measure
+                    bus.write(addrSW, "A1A2A3");
+                    System.Threading.Thread.Sleep(1000);
+
                     //measure noise parameter
+                   NFmeasure();
+                   System.Threading.Thread.Sleep(500);
                     //switch back
 
+                    bus.write(addrSW, "B1B2B3");
                 }
 
                 try
@@ -514,9 +607,9 @@ namespace NFA
                     serialPort1.Write("K");
                     if (debug == true)
                     {
-                    Textboxadd("K" + i.ToString());
+                        Textboxadd("K" + i.ToString());
                     }
-                    
+
                 }
                 catch (Exception ex)
                 {
@@ -525,25 +618,49 @@ namespace NFA
             }
         }
 
-        private void button4_Click(object sender, EventArgs e)
-        {
-            // sweep button
-            //SendMessage(hwnd, WM_rem, new IntPtr(8), new IntPtr(Convert.ToInt32(textBox3.Text)));
-            //SendMessage(hwnd, WM_rem, new IntPtr(9), new IntPtr(Convert.ToInt32(textBox3.Text)));
-            VNAsweep();
 
+        public virtual void NFmeasure()
+        {
+          //  Textboxadd("NF start");
+            string a = bus.writeread(addrNF, "T2");
+            a = bus.writeread(addrNF, "T2");
+            if (Regex.IsMatch(a, @"\d"))
+            {
+                try
+                {
+                    string[] servalspl = a.Split(',');
+
+                    decimal atemp = Decimal.Parse(servalspl[0], System.Globalization.NumberStyles.Any);
+                    decimal btemp = Decimal.Parse(servalspl[1], System.Globalization.NumberStyles.Any);
+                    decimal ctemp = Decimal.Parse(servalspl[2], System.Globalization.NumberStyles.Any);
+                    nf.Add(ctemp);
+                    gain_dut.Add(btemp);
+
+                //    textBox1.Text = textBox1.Text + System.Environment.NewLine + " freq = " + atemp.ToString() + " gain = " + btemp.ToString() + " NF = " + ctemp.ToString();
+                }
+                catch (Exception ex)
+                {
+                 //   textBox1.Text = " error ";
+                    nf.Add(9999);
+                    gain_dut.Add(0);
+                }
+               
+                noisefigure = nf.ToArray();
+                gain = gain_dut.ToArray();
+            }
+            this.SmithPictureBox.Invalidate();
         }
 
         private void VNAsweep()
         {
-            
+
             SendMessage(hwnd, WM_rem, new IntPtr(10), new IntPtr(1));
             SendMessage(hwnd, WM_rem, new IntPtr(1), new IntPtr(2));
             System.Threading.Thread.Sleep(200);
             SendMessage(hwnd, WM_rem, new IntPtr(5), new IntPtr(1));
-            System.Threading.Thread.Sleep(1000);
+            System.Threading.Thread.Sleep(3000);
             read_testfile();
-            System.Threading.Thread.Sleep(100);
+            System.Threading.Thread.Sleep(500);
             Complex[] x = s11a.ToArray();
 
             int j = x.Length;
@@ -559,19 +676,19 @@ namespace NFA
             {
                 Textboxadd("added point");
             }
-            
+
         }
         private void button5_Click(object sender, EventArgs e)
         {
             // plot button
-            Complex[] x = s11a.ToArray(); 
-            
+            Complex[] x = s11a.ToArray();
+
             int j = x.Length;
             SetSteps(j + 1, MyFont);
             for (int i = 0; i < x.Length; i++)
             {
                 Set_Z(x[i], i);
-              //  Zpoint(x[i], i);
+                //  Zpoint(x[i], i);
             }
             this.SmithPictureBox.Invalidate();
             Textboxadd("added point");
@@ -582,5 +699,125 @@ namespace NFA
             secondForm.Show();
         }
 
+        private SaveFileDialog saveFileDialog1;
+       
+        private void saveToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            
+
+            saveFileDialog1 = new SaveFileDialog();
+
+            saveFileDialog1.Filter = "Comma separated (*.csv)|*.csv|Graph picture (*.jpg)|*.jpg";
+            saveFileDialog1.FilterIndex = 1;
+            saveFileDialog1.RestoreDirectory = true;
+            saveFileDialog1.FileOk += saveFileDialog1_FileOk;
+            saveFileDialog1.ShowDialog();
+        }
+        void saveFileDialog1_FileOk(object sender, CancelEventArgs e)
+        {
+            
+
+            if (e.Cancel == true)
+                return;
+
+            var extension = Path.GetExtension(saveFileDialog1.FileName);
+
+            switch (extension.ToLower())
+            {
+                case ".jpg":
+
+
+                    // Hide the form so that it does not appear in the screenshot
+
+                    try
+                    {
+
+                        PrintScreen(saveFileDialog1.FileName);
+                        Textboxadd("screenprint saved");
+
+                    }
+                    catch (Exception exp)
+                    {
+                        MessageBox.Show(exp.Message);
+                    }
+
+                    break;
+                case ".csv":
+                    
+                    StreamWriter wText = new StreamWriter(saveFileDialog1.FileName);
+                    wText.WriteLine("! Noise parameter");
+                    wText.WriteLine("! real, imag, mag, phase, NF, gain");
+                    wText.WriteLine("# " + freqMHz + " MHz");
+                    Complex[] dataArray = s11a.ToArray(); 
+                    int length = dataArray.Length;
+                    for (int i = 0; i <= length - 1; i++)
+                    {
+                        wText.WriteLine(Convert.ToString(dataArray[i].Real, CultureInfo.InvariantCulture) + ',' + Convert.ToString(dataArray[i].Imaginary, CultureInfo.InvariantCulture) + "," + Convert.ToString(RhoAPlot[i].Magnitude, CultureInfo.InvariantCulture) + ',' + Convert.ToString(RhoAPlot[i].Phase, CultureInfo.InvariantCulture) + "," + Convert.ToString(noisefigure[i],CultureInfo.InvariantCulture)+ "," + Convert.ToString(gain[i],CultureInfo.InvariantCulture));
+                    }
+                    wText.Flush(); 
+                    wText.Close();
+                    break;
+               
+            }
+
+
+
+        }
+
+        private void PrintScreen(string file)
+        {
+
+            string initialDirectory = file;
+            using (BackgroundWorker worker = new BackgroundWorker())
+            {
+                Thread.Sleep(0);
+                this.Refresh();
+                worker.DoWork += delegate(object sender, DoWorkEventArgs e)
+                {
+                    BackgroundWorker wkr = sender as BackgroundWorker;
+                    Rectangle bounds = new Rectangle(Location, Size);
+                    Thread.Sleep(300);
+                    Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height);
+                    using (Graphics g = Graphics.FromImage(bitmap))
+                    {
+                        g.CopyFromScreen(Location, Point.Empty, bounds.Size);
+                    }
+                    e.Result = bitmap;
+                };
+                worker.RunWorkerCompleted += delegate(object sender, RunWorkerCompletedEventArgs e)
+                {
+                    if (e.Error != null)
+                    {
+                        Exception err = e.Error;
+                        while (err.InnerException != null)
+                        {
+                            err = err.InnerException;
+                        }
+                        MessageBox.Show(err.Message, "Screen Capture",
+                                        MessageBoxButtons.OK, MessageBoxIcon.Stop);
+                    }
+                    else if (e.Cancelled == true)
+                    {
+                    }
+                    else if (e.Result != null)
+                    {
+                        if (e.Result is Bitmap)
+                        {
+                            Bitmap bitmap = (Bitmap)e.Result;
+
+                            bitmap.Save(file);
+
+                        }
+                    }
+
+
+
+                };
+                worker.RunWorkerAsync();
+
+            }
+
+
+        }
     }
 }
